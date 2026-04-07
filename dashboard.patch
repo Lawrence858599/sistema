@@ -1,0 +1,15 @@
+*** Begin Patch
+*** Update File: frontend/src/pages/Dashboard.jsx
+@@
+-                    <span className={ status-badge status- + normalizeStatus(task.status)}>
++                    <span className={ status-badge status- + normalizeStatus(task.status)}>
+@@
+-                      onClick={() => window.open(/detail/, '_blank')}
++                      onClick={() => window.open('/detail/' + task.id, '_blank')}
+@@
+-                      onClick={() => request(/tasks/, { method: 'PUT', body: JSON.stringify({ status: 'Em Andamento' }) }).then(() => window.location.reload())}
++                      onClick={() => request('/tasks/' + task.id, { method: 'PUT', body: JSON.stringify({ status: 'Em Andamento' }) }).then(() => window.location.reload())}
+@@
+-                      onClick={() => request(/tasks/, { method: 'PUT', body: JSON.stringify({ status: 'Concluido' }) }).then(() => window.location.reload())}
++                      onClick={() => request('/tasks/' + task.id, { method: 'PUT', body: JSON.stringify({ status: 'Concluido' }) }).then(() => window.location.reload())}
+*** End Patch

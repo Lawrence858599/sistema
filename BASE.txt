@@ -1,0 +1,223 @@
+PROMPT (use este texto para uma IA recriar o projeto do zero com FASTAPI)
+
+Contexto
+Você vai recriar um sistema simples de manutencao (ordens/chamados) com:
+- Frontend: React + Vite (single page app)
+- Backend: FASTAPI (substituir o backend atual que hoje e Node.js + Express)
+- Banco: PostgreSQL
+
+Objetivo
+Reimplementar o mesmo projeto do zero mantendo o mesmo comportamento e contrato de API consumido pelo frontend atual, mas usando FastAPI no backend.
+
+Requisitos obrigatorios (alto nivel)
+1) Estrutura do repo:
+   - /frontend (React + Vite)
+   - /backend (FastAPI + Postgres)
+2) Backend deve expor as mesmas rotas e formatos de request/response que o frontend espera hoje.
+3) CORS deve permitir apenas a origem configurada (FRONTEND_URL).
+4) As imagens do chamado sao enviadas pelo frontend como DataURL (base64) dentro de JSON (nao multipart).
+5) Manter status permitidos: "Pendente", "Em Andamento", "Concluido".
+6) Seed de usuario admin inicial no banco:
+   - Email: admin@sistema.com
+   - Senha: 123456
+
+Contrato de API (compatibilidade)
+Base URL: por padrao o frontend usa VITE_API_BASE_URL ou "http://localhost:3000".
+Porta do backend: rode por padrao em :3000 para evitar ajuste no frontend.
+Todas as respostas e erros sao JSON. Em erro, retorne:
+  { "message": "<mensagem>" }
+
+1) POST /auth/login
+Request JSON:
+  {
+    "email": "admin@sistema.com",
+    "password": "123456"
+  }
+Regras:
+  - email e password sao obrigatorios -> 400 {message:"Email e senha sao obrigatorios."}
+  - credenciais invalidas -> 401 {message:"Credenciais invalidas."}
+Response 200 JSON (exato no formato):
+  {
+    "message": "Login realizado com sucesso.",
+    "token": "session-<userId>-<timestamp>",
+    "user": { "id": 1, "name": "Administrador", "email": "admin@sistema.com" }
+  }
+Observacao: o frontend guarda esse objeto em localStorage como "maintenanceSession". Atualmente nao envia Authorization em outras rotas, entao o backend nao deve exigir token para /tasks.
+
+2) GET /tasks
+Response 200: array de tarefas (ordenadas por createdAt desc), com camelCase:
+  [
+    {
+      "id": 1,
+      "title": "Vazamento",
+      "clientName": "Carlos",
+      "clientPhone": "(11) 99999-9999",
+      "clientEmail": "cliente@empresa.com",
+      "description": "Detalhe o problema",
+      "location": "Sala de maquinas",
+      "status": "Pendente",
+      "createdAt": "2026-03-11T00:00:00.000Z",
+      "updatedAt": "2026-03-11T00:00:00.000Z",
+      "createdByName": "Administrador",
+      "imageCount": 2
+    }
+  ]
+Observacao: imageCount deve ser numero (0 se nao houver).
+
+3) GET /tasks/{id}
+Se nao existir -> 404 {message:"Tarefa nao encontrada."}
+Response 200: mesma tarefa (camelCase) + images:
+  {
+    "id": 1,
+    "title": "...",
+    "clientName": "...",
+    "clientPhone": "...",
+    "clientEmail": "...",
+    "description": "...",
+    "location": "...",
+    "status": "Pendente",
+    "createdAt": "...",
+    "updatedAt": "...",
+    "createdByName": "Administrador",
+    "imageCount": 2,
+    "images": [
+      {
+        "id": 10,
+        "fileName": "foto.png",
+        "mimeType": "image/png",
+        "sizeBytes": 12345,
+        "imageData": "data:image/png;base64,iVBORw0KGgo...",
+        "createdAt": "..."
+      }
+    ]
+  }
+
+4) POST /tasks
+Request JSON (campos obrigatorios):
+  {
+    "title": "Vazamento",
+    "location": "Sala de maquinas",
+    "clientName": "Carlos Silva",
+    "clientPhone": "(11) 99999-9999",
+    "clientEmail": "cliente@empresa.com",
+    "description": "Detalhe o problema",
+    "createdBy": 1,
+    "images": [
+      {
+        "fileName": "foto1.jpg",
+        "mimeType": "image/jpeg",
+        "sizeBytes": 123456,
+        "imageData": "data:image/jpeg;base64,/9j/4AAQSk..."
+      }
+    ]
+  }
+Validacoes:
+  - title, clientName, clientPhone, clientEmail, description, location, createdBy obrigatorios
+    -> 400 {message:"title, clientName, clientPhone, clientEmail, description, location e createdBy sao obrigatorios."}
+  - images deve ser array -> 400 {message:"images deve ser um array."}
+  - se houver images, cada item deve ter fileName, mimeType, sizeBytes, imageData
+    -> retornar erro 500 ou 400, mas preferir 400 com {message:"Cada imagem deve conter fileName, mimeType, sizeBytes e imageData."}
+Comportamento:
+  - cria a task com status inicial "Pendente"
+  - persiste imagens em task_images vinculadas ao task_id
+Response:
+  - 201 com a task criada (na implementacao antiga retornava a linha do INSERT; aqui pode retornar um objeto consistente, preferindo camelCase).
+Transacao:
+  - se falhar ao inserir qualquer imagem, rollback.
+
+5) PUT /tasks/{id}
+Request JSON: pode enviar status e/ou description
+  { "status": "Em Andamento" }
+  { "status": "Concluido" }
+  { "description": "Novo texto" }
+Validacoes:
+  - se nao enviar status nem description -> 400 {message:"Envie ao menos status ou description para atualizar."}
+  - se task nao existir -> 404 {message:"Tarefa nao encontrada."}
+  - se status nao estiver em ["Pendente","Em Andamento","Concluido"] -> 400 {message:"Status informado e invalido."}
+Comportamento:
+  - atualiza status e/ou description
+  - atualiza updated_at = CURRENT_TIMESTAMP
+Response 200: objeto da task atualizada (preferir camelCase).
+
+Banco de dados (PostgreSQL)
+Crie o schema equivalente (pode ser via SQL puro ou migrations Alembic). Tabelas:
+
+users
+- id SERIAL PK
+- name VARCHAR(120) NOT NULL
+- email VARCHAR(150) UNIQUE NOT NULL
+- password VARCHAR(120) NOT NULL
+- created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+maintenance_tasks
+- id SERIAL PK
+- title VARCHAR(150) NOT NULL
+- description TEXT NOT NULL
+- location VARCHAR(150) NOT NULL
+- status VARCHAR(30) NOT NULL DEFAULT 'Pendente'
+- created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- client_name VARCHAR(150) NOT NULL
+- client_phone VARCHAR(40) NOT NULL
+- client_email VARCHAR(150) NOT NULL
+
+task_images
+- id SERIAL PK
+- task_id INTEGER NOT NULL REFERENCES maintenance_tasks(id) ON DELETE CASCADE
+- file_name VARCHAR(255) NOT NULL
+- mime_type VARCHAR(120) NOT NULL
+- size_bytes INTEGER NOT NULL
+- image_data TEXT NOT NULL   (DataURL base64)
+- created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+Consultas/joins esperados (comportamento):
+- GET /tasks deve incluir created_by_name (join users) e image_count (count task_images).
+- GET /tasks/{id} deve trazer images ordenadas por created_at asc.
+
+Frontend (React + Vite) comportamento esperado
+Paginas/rotas:
+- / -> Login (POST /auth/login)
+- /dashboard -> lista tasks (GET /tasks), mostra contadores por status, botoes para PUT /tasks/{id} marcando "Em Andamento" e "Concluido"
+- /registro -> formulario para criar chamado (POST /tasks) e upload de imagens via FileReader -> DataURL base64
+- /detail/:id -> detalhe do chamado (GET /tasks/{id}) e galeria com download (link direto para imageData)
+Sessao:
+- localStorage key: "maintenanceSession"
+- o frontend hoje nao envia token no header; nao implementar auth obrigatoria nas rotas de tasks.
+CORS:
+- backend deve aceitar requests somente da origem FRONTEND_URL (env) (equivalente ao backend antigo).
+
+Stack e implementacao sugeridas (backend)
+- Python 3.11+ (ou 3.10+), FastAPI, Uvicorn
+- SQLAlchemy 2.0 + asyncpg (ou psycopg) OU queries SQL diretas com asyncpg
+- Pydantic para schemas (entrada/saida) com aliases para camelCase (clientName etc)
+- dotenv para ler .env
+- Middleware de CORS
+- Tratamento de erro global: logar no console e responder 500 {message:"Erro interno do servidor."}
+
+Configuracao (env)
+Crie /backend/.env.example equivalente:
+- PORT=3000
+- FRONTEND_URL=http://127.0.0.1:5500
+- DATABASE_URL=postgresql://postgres:postgres@localhost:5432/reidosol
+
+Requisitos de entrega
+1) Um backend FastAPI funcional em /backend, com:
+   - endpoints acima
+   - schema/migrations para criar tabelas e seed do admin
+   - README com comandos de setup e execucao
+2) Um frontend em /frontend (pode reaproveitar o atual, mas o projeto final deve rodar localmente).
+3) Documentacao minima com exemplos de requests/responses (curl) e como configurar VITE_API_BASE_URL se mudar a porta.
+
+Criterios de aceitacao (na pratica)
+- Rodando Postgres + backend FastAPI em http://localhost:3000, o frontend consegue:
+  - logar com admin@sistema.com/123456
+  - listar chamados no dashboard
+  - criar chamado com imagens (base64) e ver contagem
+  - abrir detalhes e visualizar/baixar imagens
+  - atualizar status via botoes do dashboard
+
+Importante
+- Mensagens de erro devem manter o texto exatamente como definido acima (sem acentos), porque o frontend exibe o texto diretamente.
+- Garanta que as chaves JSON de resposta de /tasks e /tasks/{id} estejam em camelCase (clientName, createdAt, createdByName etc).
+

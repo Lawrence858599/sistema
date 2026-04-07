@@ -1,0 +1,9 @@
+id: frontend-conventions
+scope: frontend
+severity: required
+
+- Nao usar `window.location.reload()` para refletir mudancas.
+- Centralizar chamadas HTTP em `frontend/src/services/` (ou hooks).
+- Manter sidebar hover leve (animar por `transform`).
+- Sempre garantir `npm run build` passa (via `scripts/check.ps1`).
+

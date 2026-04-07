@@ -1,0 +1,10 @@
+id: always-run-checks
+scope: repo
+severity: required
+
+Antes de finalizar uma tarefa, execute:
+
+  powershell: .\scripts\check.ps1
+
+Nao finalize enquanto houver falhas.
+

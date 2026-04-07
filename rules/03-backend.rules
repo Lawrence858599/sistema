@@ -1,0 +1,8 @@
+id: backend-conventions
+scope: backend
+severity: required
+
+- Mudancas no schema devem ser idempotentes.
+- Restringir operacoes administrativas via `require_admin`.
+- Sempre garantir `pytest` passa (via `scripts/check.ps1`).
+
